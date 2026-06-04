@@ -47,11 +47,11 @@ cp "$HERE/macos-app/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icn
 # files they point at). The app sets SWEAR_KWS_DIR to this path on launch.
 [[ -d "$MODELS_DIR" ]] && cp -R "$MODELS_DIR" "$APP/Contents/Resources/models"
 
-# Bundle the native dylibs so the app is self-contained, and repoint the binary
-# at @rpath/Frameworks (install_name_tool must run before signing — it
-# invalidates any signature).
-cp "$RELEASE/libswearcore.dylib" "$APP/Contents/Frameworks/"
-cp "$RELEASE"/libonnxruntime.*.dylib "$APP/Contents/Frameworks/" 2>/dev/null || true
+# Bundle ALL native dylibs (libswearcore + the sherpa + onnxruntime libs it pulls
+# in, all @rpath-linked) so the app is self-contained, and repoint the binary at
+# @rpath/Frameworks. install_name_tool must run before signing (it invalidates
+# any signature). Copy real files only — skip the libonnxruntime.dylib symlink.
+find "$RELEASE" -maxdepth 1 -type f -name '*.dylib' -exec cp {} "$APP/Contents/Frameworks/" \;
 OLD_REF="$(otool -L "$APP/Contents/MacOS/SwearFilter" | awk '/libswearcore/{print $1; exit}')"
 [[ -n "$OLD_REF" ]] && install_name_tool -change "$OLD_REF" "@rpath/libswearcore.dylib" "$APP/Contents/MacOS/SwearFilter"
 install_name_tool -add_rpath "@executable_path/../Frameworks" "$APP/Contents/MacOS/SwearFilter"

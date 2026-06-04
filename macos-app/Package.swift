@@ -21,15 +21,13 @@ let package = Package(
             ],
             linkerSettings: [
                 .unsafeFlags(["-L", rustLib, "-lswearcore"]),
-                // The sherpa build links onnxruntime as a dylib whose install
-                // name is @rpath-relative; it lives in the cargo target dir, so
-                // add that dir to the executable's runtime search path. The
-                // executable sits at macos-app/.build/<triple>/<config>/, four
-                // levels below the package parent that holds rust-core/.
-                .unsafeFlags([
-                    "-Xlinker", "-rpath",
-                    "-Xlinker", "@executable_path/../../../../rust-core/target/release"
-                ]),
+                // No runtime rpath here on purpose: the native dylibs
+                // (libswearcore + sherpa + onnxruntime) all use @rpath install
+                // names, and run.sh bundles them into Contents/Frameworks and
+                // adds @executable_path/../Frameworks as the only rpath. Pointing
+                // at the build tree here would mask a missing-dylib bundling bug
+                // (the app would silently resolve from rust-core/target on this
+                // machine but crash on anyone else's).
                 .linkedFramework("CoreAudio"),
                 .linkedFramework("AudioToolbox"),
                 .linkedFramework("AVFoundation")
