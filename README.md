@@ -44,9 +44,9 @@ your menubar**.
 
 ### Prefer a prebuilt app?
 
-If someone sent you `CensorAudio.zip`, unzip it and drag `Censor Audio.app` to
-`/Applications`. It isn't notarized, so the first launch needs **right-click →
-Open → Open**, then approve the permission prompts.
+Download from **[censor.audio](https://censor.audio)** (or unzip `CensorAudio.zip`),
+drag **Censor Audio** to `/Applications`, open it, and approve the permission
+prompts. It's signed **and notarized**, so it opens with no Gatekeeper warning.
 
 ---
 
