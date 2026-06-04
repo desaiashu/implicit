@@ -70,6 +70,15 @@ impl WhisperDetector {
             seen: 0,
             last_run: 0,
             recent: Vec::new(),
+            // Rolling-window timings. The engine's output *delay* must exceed the
+            // detection lag (≈ word length + `edge` + `step` + transcription
+            // time). Transcribing an ~8 s window with small.en takes roughly:
+            //   M3/M4 Max   ~0.3 s   → min usable delay ~2.5 s
+            //   M-series Pro ~0.5 s  → min usable delay ~3.0 s   (the app default)
+            //   base M1/M2  ~0.7–0.9 s → min usable delay ~3.5 s
+            // (rough, single-core-ish estimates). On a faster chip you can lower
+            // the delay to cut lag; raise it if words slip through. Smaller `step`
+            // also lowers lag but runs Whisper more often (more CPU/heat).
             window: SAMPLE_RATE as usize * 8,    // 8 s window for context
             step: SAMPLE_RATE as u64 * 6 / 5,    // run every 1.2 s
             edge: SAMPLE_RATE as u64 * 2 / 5,     // 0.4 s trailing guard
@@ -125,7 +134,7 @@ impl WhisperDetector {
         let finalize_before = self.seen.saturating_sub(self.edge);
         let mut hits = Vec::new();
         for (w, a, b) in candidates {
-            if b > finalize_before || !self.words.contains(&w) || self.recently_emitted(&w, a) {
+            if b > finalize_before || !self.matches(&w) || self.recently_emitted(&w, a) {
                 continue;
             }
             self.recent.push((w, a));
@@ -136,6 +145,24 @@ impl WhisperDetector {
         let cutoff = self.seen.saturating_sub(self.window as u64);
         self.recent.retain(|(_, t)| *t >= cutoff);
         hits
+    }
+
+    /// Does a transcribed word match the censor list? Exact match always; plus a
+    /// conservative fuzzy match (one edit, same first letter) for longer words so
+    /// near-misses like "fuckin"→"fucking" or "biiitch" variants still catch.
+    /// Short words match exact-only — one edit there would censor innocents
+    /// ("ship"≈"shit", "as"≈"ass", "duck"≈"...").
+    fn matches(&self, w: &str) -> bool {
+        if self.words.contains(w) {
+            return true;
+        }
+        if w.len() < 6 {
+            return false;
+        }
+        let first = w.as_bytes()[0];
+        self.words.iter().any(|kw| {
+            kw.len() >= 6 && kw.as_bytes()[0] == first && within_one_edit(w, kw)
+        })
     }
 
     fn recently_emitted(&self, word: &str, abs_start: u64) -> bool {
@@ -185,6 +212,35 @@ fn push_word(word: &mut String, t0: i64, t1: i64, buf_start: u64, out: &mut Vec<
     if !w.is_empty() {
         out.push((w, buf_start + (t0.max(0) as u64) * CS, buf_start + (t1.max(0) as u64) * CS));
     }
+}
+
+/// True if `a` and `b` are within one edit (substitution, insertion, or
+/// deletion) — a cheap Levenshtein ≤ 1 over ascii bytes.
+fn within_one_edit(a: &str, b: &str) -> bool {
+    let (a, b) = (a.as_bytes(), b.as_bytes());
+    let (la, lb) = (a.len(), b.len());
+    if la.abs_diff(lb) > 1 {
+        return false;
+    }
+    if la == lb {
+        return a.iter().zip(b).filter(|(x, y)| x != y).count() <= 1;
+    }
+    // Lengths differ by one: walk both, allowing a single skip in the longer.
+    let (short, long) = if la < lb { (a, b) } else { (b, a) };
+    let (mut i, mut j, mut edits) = (0usize, 0usize, 0u32);
+    while i < short.len() && j < long.len() {
+        if short[i] == long[j] {
+            i += 1;
+            j += 1;
+        } else {
+            j += 1;
+            edits += 1;
+            if edits > 1 {
+                return false;
+            }
+        }
+    }
+    true
 }
 
 /// Lowercase and keep only ascii letters/digits (drops punctuation/spaces) so
