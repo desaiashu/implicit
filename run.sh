@@ -41,6 +41,7 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Frameworks" "$APP/Contents/Resources"
 cp "$BIN_DIR/SwearFilter" "$APP/Contents/MacOS/SwearFilter"
 cp "$HERE/macos-app/Resources/Info.plist" "$APP/Contents/Info.plist"
+cp "$HERE/macos-app/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 
 # Bundle the keyword model (whole dir: canonical symlinks + the epoch-named
 # files they point at). The app sets SWEAR_KWS_DIR to this path on launch.

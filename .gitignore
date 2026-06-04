@@ -10,6 +10,7 @@ macos-app/*.xcodeproj
 
 # Built app bundle + distributable archives
 /build/
+*.app/
 *.zip
 
 # Tokeniser virtualenv (created by scripts/fetch-model.sh)
