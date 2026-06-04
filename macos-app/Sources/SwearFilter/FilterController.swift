@@ -42,7 +42,10 @@ final class FilterController: ObservableObject {
     /// Factory defaults, shared by first launch and the Reset button.
     enum Defaults {
         static let bleep = false
-        static let delay = 2500.0  // Whisper runs in rolling windows → larger lag than the old spotter
+        // Whisper's detection lag ≈ word length + ~1.6 s (run cadence + finalize
+        // guard + transcription). 3 s comfortably clears that so even long words
+        // are caught before the delayed audio plays; raise it to catch more.
+        static let delay = 3000.0
         static let postroll = 150.0
     }
 

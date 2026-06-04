@@ -17,3 +17,7 @@ macos-app/*.xcodeproj
 scripts/.venv/
 
 .DS_Store
+
+# Wrangler local state / deploy build dir (never commit)
+.wrangler/
+.site-build/
