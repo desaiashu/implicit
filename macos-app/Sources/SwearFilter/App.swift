@@ -9,7 +9,8 @@ struct SwearFilterApp: App {
         MenuBarExtra {
             ControlsView(controller: controller)
         } label: {
-            Image(systemName: controller.isOn ? "person.wave.2.fill" : "person.wave.2")
+            // On = "you're covered"; off = "⚠ audio is unfiltered".
+            Image(systemName: controller.isOn ? "ear.badge.checkmark" : "ear.trianglebadge.exclamationmark")
         }
         .menuBarExtraStyle(.window)
     }
