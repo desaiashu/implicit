@@ -1,4 +1,4 @@
-# Implicit
+# Censor Audio
 
 A macOS menubar app that **censors profanity in the audio you're listening to**
 — music, videos, streams, calls — in real time, before it reaches your speakers.
@@ -34,17 +34,17 @@ cd implicit
 ```
 
 `run.sh` builds the Rust core (with whisper.cpp statically linked + Metal) and
-the Swift app, assembles a self-contained, code-signed `build/Implicit.app`
+the Swift app, assembles a self-contained, code-signed `build/Censor Audio.app`
 (model + library bundled inside), and launches it. Look for the **ear icon in
 your menubar**.
 
 > First run prompts for **Microphone** and **Screen & System Audio Recording**
 > (the latter is what gates system-audio capture on macOS 15+). Grant both in
-> System Settings → Privacy & Security, then toggle Implicit on.
+> System Settings → Privacy & Security, then toggle Censor Audio on.
 
 ### Prefer a prebuilt app?
 
-If someone sent you `Implicit.zip`, unzip it and drag `Implicit.app` to
+If someone sent you `CensorAudio.zip`, unzip it and drag `Censor Audio.app` to
 `/Applications`. It isn't notarized, so the first launch needs **right-click →
 Open → Open**, then approve the permission prompts.
 
@@ -72,11 +72,11 @@ never taps your audio without you.
 system / app audio ─▶ Core Audio process tap (muted) ─▶ ~2.5 s delay ─▶ speakers
      (macOS 14.4+)              │                              ▲
                                └─▶ Whisper (rolling windows) ──┘  word on the list → mute/bleep that span
-                  (Implicit's own output is excluded from the tap — no feedback loop)
+                  (Censor Audio's own output is excluded from the tap — no feedback loop)
 ```
 
 - **Capture (Swift, `macos-app/`).** A Core Audio *process tap* captures all
-  system audio and mutes the original; Implicit plays back a delayed, censored
+  system audio and mutes the original; Censor Audio plays back a delayed, censored
   copy. An aggregate device drives the IOProc and follows your default output, so
   switching to AirPods/HDMI mid-stream keeps working.
 - **Detector (Rust, `rust-core/`).** The delayed audio (downmixed to 16 kHz) is
@@ -102,7 +102,7 @@ bit more latency, which is why the delay sits around 2–3 s.
 | `run.sh` | Build → bundle → sign → launch. |
 
 > Internal names: the Rust engine crate is `swearcore` / the Swift product target
-> is `SwearFilter` — only the user-facing app is branded **Implicit**. A legacy
+> is `SwearFilter` — only the user-facing app is branded **Censor Audio**. A legacy
 > sherpa keyword-spotter detector remains behind the `sherpa` feature but is not
 > used by the app.
 

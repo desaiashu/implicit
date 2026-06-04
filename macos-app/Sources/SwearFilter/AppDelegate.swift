@@ -51,7 +51,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let window = NSWindow(
                 contentRect: NSRect(x: 0, y: 0, width: 380, height: 460),
                 styleMask: [.titled, .closable], backing: .buffered, defer: false)
-            window.title = "Implicit — Words"
+            window.title = "Censor Audio — Words"
             window.isReleasedWhenClosed = false
             window.contentViewController = NSHostingController(rootView: WordsEditorView(controller: controller))
             window.center()

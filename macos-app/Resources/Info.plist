@@ -5,9 +5,9 @@
 	<key>CFBundleIdentifier</key>
 	<string>com.swearfilter.SwearFilter</string>
 	<key>CFBundleName</key>
-	<string>Implicit</string>
+	<string>Censor Audio</string>
 	<key>CFBundleDisplayName</key>
-	<string>Implicit</string>
+	<string>Censor Audio</string>
 	<key>CFBundleExecutable</key>
 	<string>SwearFilter</string>
 	<key>CFBundleIconFile</key>
@@ -23,8 +23,8 @@
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Implicit taps system audio to detect and censor profanity in real time.</string>
+	<string>Censor Audio taps system audio to detect and censor profanity in real time.</string>
 	<key>NSAudioCaptureUsageDescription</key>
-	<string>Implicit captures system audio output to detect and censor profanity in real time.</string>
+	<string>Censor Audio captures system audio output to detect and censor profanity in real time.</string>
 </dict>
 </plist>

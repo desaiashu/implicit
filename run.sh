@@ -4,7 +4,7 @@
 #
 #   ./run.sh
 #
-# Produces build/Implicit.app — a self-contained, signed menubar agent (no dock
+# Produces build/Censor Audio.app — a self-contained, signed menubar agent (no dock
 # icon) with the Whisper model bundled inside. Tuning (mute/bleep, output delay,
 # tail, word list) is done from the menubar; settings persist across launches.
 # Detection needs the model: run ./scripts/fetch-model.sh once. Without it the
@@ -35,8 +35,8 @@ echo "==> building app binary"
 swift build --package-path "$HERE/macos-app"
 BIN_DIR="$(swift build --package-path "$HERE/macos-app" --show-bin-path)"
 
-echo "==> packaging Implicit.app"
-APP="$HERE/build/Implicit.app"
+echo "==> packaging Censor Audio.app"
+APP="$HERE/build/Censor Audio.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Frameworks" "$APP/Contents/Resources"
 cp "$BIN_DIR/SwearFilter" "$APP/Contents/MacOS/SwearFilter"
@@ -70,9 +70,9 @@ codesign --force --sign "$SIGN_ID" \
   --entitlements "$HERE/macos-app/Resources/SwearFilter.entitlements" \
   "$APP"
 
-echo "==> launching Implicit (look for the ear icon in the menubar)"
+echo "==> launching Censor Audio (look for the ear icon in the menubar)"
 # Relaunch cleanly if a previous build is still running.
-pkill -f "Implicit.app/Contents/MacOS/SwearFilter" 2>/dev/null || true
+pkill -f "Censor Audio.app/Contents/MacOS/SwearFilter" 2>/dev/null || true
 # Refresh LaunchServices so `open` doesn't hit a stale registration (-600) after
 # repeated rebuilds.
 LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister"

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Censor Audio — real-time profanity filter for macOS</title>
+<meta name="description" content="Censor Audio mutes profanity in anything you listen to on your Mac — music, videos, streams — in real time, before it reaches your speakers." />
+<meta property="og:title" content="Censor Audio" />
+<meta property="og:description" content="Real-time profanity filter for your Mac's audio." />
+<meta property="og:type" content="website" />
+<style>
+  :root { --bg1:#1b3a5b; --bg2:#0b1a2e; --accent:#3aa0c8; --text:#eef4f8; --muted:#9fb3c4; }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; }
+  body {
+    font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    color: var(--text);
+    background: radial-gradient(120% 120% at 50% 0%, var(--bg1), var(--bg2));
+    min-height:100%; display:flex; align-items:center; justify-content:center; padding:48px 20px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .card { width:100%; max-width:560px; text-align:center; }
+  .icon { width:128px; height:128px; border-radius:28px; box-shadow:0 12px 40px rgba(0,0,0,.45); }
+  h1 { font-size:2.6rem; margin:24px 0 6px; letter-spacing:-.02em; }
+  .tag { color:var(--muted); font-size:1.15rem; margin:0 auto 32px; max-width:34ch; }
+  .download {
+    display:inline-block; background:var(--accent); color:#06121d; font-weight:700; font-size:1.1rem;
+    text-decoration:none; padding:15px 34px; border-radius:13px; transition:transform .08s ease, filter .15s ease;
+  }
+  .download:hover { filter:brightness(1.08); transform:translateY(-1px); }
+  .meta { color:var(--muted); font-size:.92rem; margin-top:14px; }
+  .steps { color:var(--muted); font-size:.9rem; margin-top:40px; text-align:left; max-width:430px; margin-left:auto; margin-right:auto; }
+  .steps li { margin:7px 0; }
+  .steps code { background:rgba(255,255,255,.08); padding:1px 6px; border-radius:5px; }
+  footer { color:var(--muted); opacity:.7; font-size:.82rem; margin-top:40px; }
+  a { color:var(--accent); }
+</style>
+</head>
+<body>
+  <main class="card">
+    <img class="icon" src="icon.png" alt="Censor Audio icon" />
+    <h1>Censor Audio</h1>
+    <p class="tag">Mutes profanity in anything you hear on your Mac — music, videos, streams — in real time, before it reaches your speakers.</p>
+
+    <a class="download" href="__DOWNLOAD_URL__" download>Download for macOS</a>
+    <p class="meta">Apple&nbsp;Silicon · macOS&nbsp;14.4+ · ~430&nbsp;MB</p>
+
+    <ol class="steps">
+      <li>Unzip and drag <strong>Censor Audio</strong> to your Applications folder.</li>
+      <li>First launch: <strong>right-click → Open → Open</strong> (it's signed but not yet notarized).</li>
+      <li>Allow <strong>Microphone</strong> and <strong>Screen &amp; System Audio Recording</strong> when asked.</li>
+      <li>Click the ear icon in the menu bar and switch it on.</li>
+    </ol>
+
+    <footer>Runs entirely on-device. No audio leaves your Mac.</footer>
+  </main>
+</body>
+</html>

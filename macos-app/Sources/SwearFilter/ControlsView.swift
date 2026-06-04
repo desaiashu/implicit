@@ -7,8 +7,15 @@ struct ControlsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 6) {
+                Image(systemName: "ear")
+                Text("Censor Audio").font(.headline)
+            }
+
+            Divider()
+
             Toggle(isOn: Binding(get: { controller.isOn }, set: { _ in controller.toggle() })) {
-                Text("Censor system audio").font(.headline)
+                Text("Censor system audio")
             }
             .toggleStyle(.switch)
 
@@ -40,6 +47,9 @@ struct ControlsView: View {
             HStack {
                 Button("Reset") { controller.reset() }
                 Spacer()
+                Button("Info") {
+                    if let url = URL(string: "https://censor.audio") { NSWorkspace.shared.open(url) }
+                }
                 Button("Quit") { NSApplication.shared.terminate(nil) }
                     .keyboardShortcut("q")
             }
