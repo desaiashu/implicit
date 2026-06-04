@@ -70,7 +70,11 @@ codesign --force --sign "$SIGN_ID" \
   --entitlements "$HERE/macos-app/Resources/SwearFilter.entitlements" \
   "$APP"
 
-echo "==> launching Implicit (look for the speaking-person icon in the menubar)"
+echo "==> launching Implicit (look for the ear icon in the menubar)"
 # Relaunch cleanly if a previous build is still running.
 pkill -f "Implicit.app/Contents/MacOS/SwearFilter" 2>/dev/null || true
+# Refresh LaunchServices so `open` doesn't hit a stale registration (-600) after
+# repeated rebuilds.
+LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister"
+[[ -x "$LSREGISTER" ]] && "$LSREGISTER" -f "$APP" 2>/dev/null || true
 open "$APP"
