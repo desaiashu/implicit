@@ -41,7 +41,15 @@ sed -i '' "s#__DOWNLOAD_URL__#${DOWNLOAD_URL//#/\\#}#" "$BUILD/index.html"
 "$WR" pages project create "$PROJECT" --production-branch main 2>/dev/null || true
 "$WR" pages deploy "$BUILD" --project-name "$PROJECT" --commit-dirty=true
 
+echo "==> Pages: attach custom domain censor.audio (zone is on this account)"
+"$WR" pages domain add censor.audio --project-name "$PROJECT" 2>/dev/null \
+  || echo "    (already attached, or add it in Dashboard → Pages → $PROJECT → Custom domains)"
+
 echo
 echo "Done."
-echo "  • Site:    https://$PROJECT.pages.dev  (add custom domain censor.audio in the Pages dashboard)"
+echo "  • Site:     https://censor.audio  (also https://$PROJECT.pages.dev)"
 echo "  • Download: $DOWNLOAD_URL"
+echo
+echo "Nicer download URL (optional): attach a custom domain to the R2 bucket"
+echo "(Dashboard → R2 → $BUCKET → Settings → Custom domains, e.g. dl.censor.audio),"
+echo "then re-run with DOWNLOAD_URL=https://dl.censor.audio/$KEY ./deploy-site.sh"
