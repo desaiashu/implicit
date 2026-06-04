@@ -1,0 +1,5 @@
+module CSwearCore {
+    header "shim.h"
+    link "swearcore"
+    export *
+}

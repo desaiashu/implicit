@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleIdentifier</key>
+	<string>com.swearfilter.SwearFilter</string>
+	<key>CFBundleName</key>
+	<string>Implicit</string>
+	<key>CFBundleDisplayName</key>
+	<string>Implicit</string>
+	<key>CFBundleExecutable</key>
+	<string>SwearFilter</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.1.0</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.4</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Implicit taps system audio to detect and censor profanity in real time.</string>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>Implicit captures system audio output to detect and censor profanity in real time.</string>
+</dict>
+</plist>

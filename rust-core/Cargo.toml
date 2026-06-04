@@ -1,0 +1,27 @@
+[package]
+name = "swearcore"
+version = "0.1.0"
+edition = "2021"
+description = "Real-time, low-latency speech censor core (delay line + keyword-spotting detector) for the macOS swear-filter app."
+license = "MIT"
+publish = false
+
+[lib]
+name = "swearcore"
+# rlib for the Rust unit tests; staticlib/cdylib for the Swift shell to link.
+crate-type = ["rlib", "staticlib", "cdylib"]
+
+[features]
+default = []
+# Enables the sherpa-onnx streaming keyword-spotter. Off by default so the pure
+# core (delay + censor + detector trait) builds and tests with zero native deps.
+sherpa = ["dep:sherpa-rs"]
+
+[dependencies]
+# `sys` re-exports the raw `sherpa_rs_sys` FFI, which kws.rs drives directly for
+# the continuous streaming keyword-spotting flow (the safe wrapper is one-shot).
+sherpa-rs = { version = "0.6", optional = true, features = ["sys"] }
+
+[profile.release]
+lto = true
+codegen-units = 1

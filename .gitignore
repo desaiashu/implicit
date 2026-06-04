@@ -1,0 +1,18 @@
+# Rust
+rust-core/target/
+
+# Models (downloaded by scripts/fetch-model.sh — never commit the binaries)
+rust-core/models/
+
+# Swift / Xcode
+macos-app/.build/
+macos-app/*.xcodeproj
+
+# Built app bundle + distributable archives
+/build/
+*.zip
+
+# Tokeniser virtualenv (created by scripts/fetch-model.sh)
+scripts/.venv/
+
+.DS_Store
