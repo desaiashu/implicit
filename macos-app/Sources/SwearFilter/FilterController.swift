@@ -77,14 +77,13 @@ final class FilterController: ObservableObject {
         bleep = ud.object(forKey: Key.bleep) == nil ? Defaults.bleep : ud.bool(forKey: Key.bleep)
         delayMs = saved(Key.delay, Defaults.delay)
         postrollMs = saved(Key.postroll, Defaults.postroll)
-
-        requestPermissions()
     }
 
     func toggle() { isOn ? stop() : start() }
 
     func start() {
         guard tap == nil else { return }
+        requestPermissions() // only when turning on, and only the ones missing
         let t = AudioTap(delayMs: Float(delayMs),
                          mode: bleep ? .bleep : .mute,
                          postrollMs: UInt32(postrollMs))
@@ -142,7 +141,10 @@ final class FilterController: ObservableObject {
     /// Prompt for the two permissions a process tap needs: microphone and (on
     /// macOS 15+/26) Screen & System Audio Recording. Both are no-ops once granted.
     private func requestPermissions() {
-        AVCaptureDevice.requestAccess(for: .audio) { _ in }
+        // Only prompt for what isn't already decided — no nagging on every launch.
+        if AVCaptureDevice.authorizationStatus(for: .audio) == .notDetermined {
+            AVCaptureDevice.requestAccess(for: .audio) { _ in }
+        }
         if !CGPreflightScreenCaptureAccess() {
             _ = CGRequestScreenCaptureAccess()
         }

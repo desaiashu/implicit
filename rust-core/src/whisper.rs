@@ -147,19 +147,24 @@ impl WhisperDetector {
         hits
     }
 
-    /// Does a transcribed word match the censor list? Exact match always; plus a
-    /// conservative fuzzy match (one edit, same first letter) for longer words so
-    /// near-misses like "fuckin"→"fucking" or "biiitch" variants still catch.
-    /// Short words match exact-only — one edit there would censor innocents
-    /// ("ship"≈"shit", "as"≈"ass", "duck"≈"...").
+    /// Does a transcribed word match the censor list?
+    /// 1. Exact match.
+    /// 2. Elongation (any length): the word is a list word with letters repeated,
+    ///    e.g. "fuuuck", "shiiit", "biiitch", "asss". Safe even for short words —
+    ///    it only repeats the word's own letters in order, never substitutes, so
+    ///    "ship"≠"shit", "duck"≠"...", "as"≠"ass".
+    /// 3. One-edit fuzzy (length ≥ 6, same first letter): genuine near-misses like
+    ///    "fuckin"→"fucking". Gated to long words because one edit on a short word
+    ///    would censor innocents.
     fn matches(&self, w: &str) -> bool {
-        if self.words.contains(w) {
+        let wb = w.as_bytes();
+        if self.words.contains(w) || self.words.iter().any(|kw| elongation_match(wb, kw.as_bytes())) {
             return true;
         }
         if w.len() < 6 {
             return false;
         }
-        let first = w.as_bytes()[0];
+        let first = wb[0];
         self.words.iter().any(|kw| {
             kw.len() >= 6 && kw.as_bytes()[0] == first && within_one_edit(w, kw)
         })
@@ -212,6 +217,34 @@ fn push_word(word: &mut String, t0: i64, t1: i64, buf_start: u64, out: &mut Vec<
     if !w.is_empty() {
         out.push((w, buf_start + (t0.max(0) as u64) * CS, buf_start + (t1.max(0) as u64) * CS));
     }
+}
+
+/// True if `cand` is `sw` with one or more letters held longer ("fuuuck" for
+/// "fuck", "asss" for "ass"). Walks both as runs of identical bytes: every run
+/// in `sw` must appear in `cand`, same letter and in order, with at least as many
+/// repeats. No substitutions, so it never matches a different word.
+fn elongation_match(cand: &[u8], sw: &[u8]) -> bool {
+    let (mut i, mut k) = (0usize, 0usize);
+    while k < sw.len() {
+        let c = sw[k];
+        let mut sw_run = 0;
+        while k < sw.len() && sw[k] == c {
+            sw_run += 1;
+            k += 1;
+        }
+        if i >= cand.len() || cand[i] != c {
+            return false;
+        }
+        let mut cand_run = 0;
+        while i < cand.len() && cand[i] == c {
+            cand_run += 1;
+            i += 1;
+        }
+        if cand_run < sw_run {
+            return false;
+        }
+    }
+    i == cand.len() && !sw.is_empty()
 }
 
 /// True if `a` and `b` are within one edit (substitution, insertion, or

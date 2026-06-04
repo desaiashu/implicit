@@ -18,6 +18,11 @@ CREDS="${NOTARY_PROFILE:-notarytool-creds}"
 
 [[ -d "$APP" ]] || { echo "error: $APP not found — run ./run.sh first." >&2; exit 1; }
 
+# A running instance keeps the dylib mapped, which makes codesign fail with
+# "internal error in Code Signing subsystem". Quit it first.
+pkill -f "Censor Audio.app/Contents/MacOS/SwearFilter" 2>/dev/null || true
+sleep 1
+
 echo "==> re-sign with hardened runtime (Developer ID)"
 codesign --force --options runtime --timestamp --sign "$DEVID" "$APP/Contents/Frameworks/"*.dylib
 codesign --force --options runtime --timestamp --sign "$DEVID" \

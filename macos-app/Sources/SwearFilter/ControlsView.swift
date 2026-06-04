@@ -36,7 +36,7 @@ struct ControlsView: View {
 
             paramSlider("Output delay", value: $controller.delayMs, range: 1500...5000,
                         format: { $0 >= 1000 ? String(format: "%.1f s", $0 / 1000) : "\(Int($0)) ms" },
-                        help: "Whisper needs lead time; more delay catches more, with more lag.",
+                        help: "Higher catches more, more lag. Rough min by chip: M3/M4 Max ~2.5 s · M Pro ~3 s · base/older ~3.5 s.",
                         onRelease: { controller.restartForStructuralChange() })
             paramSlider("Trailing tail", value: $controller.postrollMs, range: 0...500,
                         help: "Extra silence kept after the word.")
