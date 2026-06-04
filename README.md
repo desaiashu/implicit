@@ -2,13 +2,13 @@
 
 A macOS menubar app that **censors profanity in the audio you're listening to**
 — music, videos, streams, calls — in real time, before it reaches your speakers.
-It works like a broadcast "dump" delay: system audio is held for ~1 second, a
-streaming keyword spotter listens for swear words, and any hit is muted (or
-bleeped) in the still-buffered audio before you ever hear it.
+It works like a broadcast "dump" delay: system audio is held for a couple of
+seconds, an on-device **Whisper** model transcribes it, and any word on your
+list is muted (or bleeped) in the still-buffered audio before you ever hear it.
 
 No virtual audio driver to install — it uses macOS 14.4+ Core Audio process taps.
 
-![macOS](https://img.shields.io/badge/macOS-14.4%2B-blue) ![core](https://img.shields.io/badge/core-Rust-orange) ![shell](https://img.shields.io/badge/shell-SwiftUI-red)
+![macOS](https://img.shields.io/badge/macOS-14.4%2B-blue) ![core](https://img.shields.io/badge/core-Rust-orange) ![asr](https://img.shields.io/badge/ASR-whisper.cpp%20(Metal)-purple) ![shell](https://img.shields.io/badge/shell-SwiftUI-red)
 
 ---
 
@@ -16,8 +16,8 @@ No virtual audio driver to install — it uses macOS 14.4+ Core Audio process ta
 
 **Requirements**
 
-- macOS **14.4 or newer** (Core Audio process taps).
-- [Rust](https://rustup.rs) (`cargo`).
+- macOS **14.4 or newer** (Core Audio process taps), Apple Silicon recommended (Metal).
+- [Rust](https://rustup.rs) (`cargo`) and `cmake` (`brew install cmake`) — whisper.cpp builds from source.
 - Xcode or the Command Line Tools (`xcode-select --install`) for `swift`.
 
 **Steps**
@@ -26,120 +26,87 @@ No virtual audio driver to install — it uses macOS 14.4+ Core Audio process ta
 git clone https://github.com/desaiashu/implicit.git
 cd implicit
 
-# 1. Download the keyword-spotting model (~19 MB, one time).
+# 1. Download the Whisper model (~465 MB, one time).
 ./scripts/fetch-model.sh
 
-# 2. Build, bundle, sign, and launch.
+# 2. Build, bundle, sign, and launch. (First build compiles whisper.cpp — a few minutes.)
 ./run.sh
 ```
 
-`run.sh` builds the Rust core and the Swift app, assembles a self-contained,
-code-signed `build/Implicit.app` (model + native libraries bundled inside), and
-launches it. Look for the **speaking-person icon in your menubar**.
+`run.sh` builds the Rust core (with whisper.cpp statically linked + Metal) and
+the Swift app, assembles a self-contained, code-signed `build/Implicit.app`
+(model + library bundled inside), and launches it. Look for the **ear icon in
+your menubar**.
 
-> The first run prompts for two permissions — **Microphone** and **Screen &
-> System Audio Recording** (the latter is what actually gates system-audio
-> capture on macOS 15+). Grant both in System Settings → Privacy & Security,
-> then toggle Implicit on. The grant sticks across rebuilds.
+> First run prompts for **Microphone** and **Screen & System Audio Recording**
+> (the latter is what gates system-audio capture on macOS 15+). Grant both in
+> System Settings → Privacy & Security, then toggle Implicit on.
 
 ### Prefer a prebuilt app?
 
 If someone sent you `Implicit.zip`, unzip it and drag `Implicit.app` to
-`/Applications`. Because it isn't notarized, the first launch needs:
-**right-click → Open → Open**, then approve the permission prompts. (If macOS
-still blocks it, allow it under System Settings → Privacy & Security → "Open
-Anyway".)
+`/Applications`. It isn't notarized, so the first launch needs **right-click →
+Open → Open**, then approve the permission prompts.
 
 ---
 
 ## Using it
 
-Click the menubar icon for the controls:
+Click the menubar ear for the controls:
 
-- **Censor system audio** — the on/off switch (starts/stops the tap).
+- **Censor system audio** — the on/off switch.
 - **Mute / Bleep** — silence the word, or replace it with a tone.
-- **Sensitivity** — higher catches more (helpful for words buried under music),
-  at the cost of more false hits.
-- **Output delay** — how far audio is delayed (the lag). Higher reliably catches
-  long words; lower feels snappier. Applied when you release the slider.
-- **Word length / letter**, **Latency reach-back**, **Trailing tail** — fine
-  controls over exactly how much audio around each detected word is muted (see
-  *Tuning* below). These apply live.
-- **Reset** — restore factory defaults. **Quit** — stop and exit (⌘Q).
+- **Output delay** — how far audio is delayed. Whisper recognizes words with
+  some lag, so this needs to be ~2–3 s; higher catches more, with more lag.
+- **Trailing tail** — extra silence kept after a censored word.
+- **Edit Words…** — opens a window to edit the censored-word list (one per line).
+  It's plain text, so **any word works instantly** — no rebuild, no tokenization.
+- **Reset** / **Quit**.
 
-Settings persist across launches.
-
-### Tuning the censor window
-
-The spotter only recognizes a word *after* it finishes (plus ~160–320 ms of
-detector latency), so the app reaches **backward** over the just-played audio to
-mute it:
-
-- **start of a word leaks through** → raise **Word length / letter** or
-  **Latency reach-back**, or raise **Output delay** for more headroom.
-- **end of a word / next syllable cut off** → raise **Trailing tail**, or lower
-  **Latency reach-back**.
-- **too much silence around a word** → lower **Word length / letter** and
-  **Trailing tail**.
-
-Because you can't censor a word before you know it's a swear (i.e. before it
-finishes), the output delay has a real floor of roughly *longest word + detector
-latency* — about a second for words like "motherfucker". That's physics, not a
-bug.
-
-### Editing the word list
-
-The words live in [`scripts/swears.txt`](scripts/swears.txt), one per line.
-After editing, regenerate the model's keyword file:
-
-```bash
-./scripts/fetch-model.sh    # re-tokenizes swears.txt into the model's keywords
-./run.sh                    # rebuild with the new list
-```
-
-> The keyword spotter matches *exact* phonetic token sequences, so include
-> morphological variants explicitly (`fuck`, `fucking`, `fucked`, …). The model's
-> vocabulary is uppercase (GigaSpeech); the tokenizer step handles the casing.
-
----
+Settings persist across launches; the on/off switch starts off each launch so it
+never taps your audio without you.
 
 ## How it works
 
 ```
-system / app audio ─▶ Core Audio process tap (muted) ─▶ ~1 s delay line ─▶ speakers
+system / app audio ─▶ Core Audio process tap (muted) ─▶ ~2.5 s delay ─▶ speakers
      (macOS 14.4+)              │                              ▲
-                               └─▶ streaming keyword spotter ──┘  hit → mute/bleep that span
+                               └─▶ Whisper (rolling windows) ──┘  word on the list → mute/bleep that span
                   (Implicit's own output is excluded from the tap — no feedback loop)
 ```
 
 - **Capture (Swift, `macos-app/`).** A Core Audio *process tap* captures all
-  system audio and mutes the original, so Implicit can post-process and play back
-  a censored copy. An aggregate device drives the IOProc; the output follows your
-  default device, so switching to AirPods/HDMI mid-stream keeps working.
-- **Censor core (Rust, `rust-core/`).** A fixed delay line holds the most recent
-  audio. A downmixed/resampled copy feeds a streaming Zipformer keyword spotter
-  ([sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx)); on a hit, the word's
-  span is muted/bleeped in the still-buffered audio with click-free cosine fades.
-  Detection timing is live-tunable over a small C ABI.
+  system audio and mutes the original; Implicit plays back a delayed, censored
+  copy. An aggregate device drives the IOProc and follows your default output, so
+  switching to AirPods/HDMI mid-stream keeps working.
+- **Detector (Rust, `rust-core/`).** The delayed audio (downmixed to 16 kHz) is
+  transcribed in rolling windows by **whisper.cpp** (Metal-accelerated, ~20×
+  realtime for `small.en`). Words on the list are matched in the transcript and
+  censored using Whisper's per-word timestamps, with click-free cosine fades.
 
-A keyword spotter (not Whisper) is the right tool here: it's a *streaming*
-architecture (~160–320 ms latency, on-device) built for "spot these N words
-now", whereas Whisper's streaming latency runs into seconds.
+### Why Whisper
+
+The original streaming keyword-spotter (and even much larger streaming ASR
+models) mis-hear vocals buried under a beat — they're trained on clean speech.
+Whisper is trained on far noisier/musical audio and transcribes rap vocals
+cleanly, so it actually catches the words. The tradeoffs are higher CPU and a
+bit more latency, which is why the delay sits around 2–3 s.
 
 ## Project layout
 
 | Path | What |
 |------|------|
-| `rust-core/` | Censor pipeline: delay line, click-free mute/bleep, detector interface, sherpa-onnx KWS (feature-gated), C ABI. Unit-tested (`cd rust-core && cargo test`). |
-| `macos-app/` | SwiftUI menubar app: Core Audio tap + aggregate-device IOProc, Rust bridge, live controls. |
-| `scripts/` | `fetch-model.sh` (download/stage + tokenize the model), `swears.txt` (word list). |
+| `rust-core/` | Delay line, click-free mute/bleep, detector interface, and the whisper.cpp detector (feature `whisper`). C ABI for the Swift shell. |
+| `macos-app/` | SwiftUI menubar app: Core Audio tap + aggregate-device IOProc, Rust bridge, controls + word editor. |
+| `scripts/` | `fetch-model.sh` (download the Whisper model), `swears.txt` (default word list). |
 | `run.sh` | Build → bundle → sign → launch. |
 
-> Internal names: the Rust audio engine crate is `swearcore` (linked as
-> `libswearcore`) and the Swift product target is `SwearFilter` — only the
-> user-facing app is branded **Implicit**.
+> Internal names: the Rust engine crate is `swearcore` / the Swift product target
+> is `SwearFilter` — only the user-facing app is branded **Implicit**. A legacy
+> sherpa keyword-spotter detector remains behind the `sherpa` feature but is not
+> used by the app.
 
 ## License
 
-Personal project. The bundled keyword model is from
-[sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (Apache-2.0).
+Personal project. Bundles the [whisper.cpp](https://github.com/ggerganov/whisper.cpp)
+`ggml-small.en` model (MIT).

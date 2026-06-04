@@ -44,11 +44,15 @@ fn mode_from(raw: u32) -> Mode {
 /// Build the detector. With the `sherpa` feature it's the streaming
 /// keyword-spotter on its own worker thread; otherwise an inert detector so the
 /// pipeline runs as a transparent delay you can drive with `force_censor`.
-#[cfg(feature = "sherpa")]
+#[cfg(feature = "whisper")]
+fn make_detector(_device_rate: u32, timing: Arc<DetectorTiming>, _sensitivity: f32) -> Box<dyn crate::Detector> {
+    crate::whisper::default_detector(timing)
+}
+#[cfg(all(feature = "sherpa", not(feature = "whisper")))]
 fn make_detector(_device_rate: u32, timing: Arc<DetectorTiming>, sensitivity: f32) -> Box<dyn crate::Detector> {
     crate::kws::default_detector(timing, sensitivity)
 }
-#[cfg(not(feature = "sherpa"))]
+#[cfg(not(any(feature = "whisper", feature = "sherpa")))]
 fn make_detector(_device_rate: u32, _timing: Arc<DetectorTiming>, _sensitivity: f32) -> Box<dyn crate::Detector> {
     Box::new(crate::MockDetector::inert(16_000))
 }
@@ -188,4 +192,16 @@ pub extern "C" fn swear_tokenize_keywords(
             -1
         }
     }
+}
+
+/// Stub when built without sherpa (e.g. the whisper build, which matches plain
+/// text and needs no tokenisation) — keeps the symbol present for the Swift link.
+#[cfg(not(feature = "sherpa"))]
+#[no_mangle]
+pub extern "C" fn swear_tokenize_keywords(
+    _model_dir: *const c_char,
+    _words: *const c_char,
+    _out_path: *const c_char,
+) -> i32 {
+    -1
 }

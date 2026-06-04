@@ -25,6 +25,8 @@ pub mod ffi;
 mod kws;
 #[cfg(feature = "sherpa")]
 pub mod tokenize;
+#[cfg(feature = "whisper")]
+pub mod whisper;
 
 pub use censor::Mode;
 pub use detector::{Detection, Detector, DetectorTiming, MockDetector, ThreadedDetector};

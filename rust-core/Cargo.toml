@@ -13,11 +13,15 @@ crate-type = ["rlib", "staticlib", "cdylib"]
 
 [features]
 default = []
-# Enables the sherpa-onnx streaming keyword-spotter. Off by default so the pure
-# core (delay + censor + detector trait) builds and tests with zero native deps.
+# sherpa: the small streaming keyword-spotter (legacy; weak on music).
 sherpa = ["dep:sherpa-rs", "dep:sentencepiece"]
+# whisper: transcribe with whisper.cpp (Metal) and match words in the transcript
+# — far more robust to music-mixed vocals. This is the path the app builds with.
+whisper = ["dep:whisper-rs"]
 
 [dependencies]
+# Whisper detector backend (whisper.cpp, statically linked, Metal-accelerated).
+whisper-rs = { version = "0.16", optional = true, features = ["metal"] }
 # `sys` re-exports the raw `sherpa_rs_sys` FFI, which kws.rs drives directly for
 # the continuous streaming keyword-spotting flow (the safe wrapper is one-shot).
 sherpa-rs = { version = "0.6", optional = true, features = ["sys"] }

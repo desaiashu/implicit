@@ -4,11 +4,9 @@ import CoreGraphics
 import SwiftUI
 
 /// Owns the audio tap and the live-tunable settings, and bridges them to the
-/// menubar UI. Live params (mute/bleep, word-length estimate, latency reach-back,
-/// postroll) are pushed straight into the running engine; the output delay and
-/// sensitivity are structural (baked in at engine creation) so they rebuild the
-/// engine on change. The editable word list is tokenised on apply and written to
-/// a writable keyword file outside the (read-only, signed) app bundle.
+/// menubar UI. The detector is Whisper (transcribe + match words in the
+/// transcript), so the word list is plain text — edits take effect on the next
+/// engine start with no tokenisation step.
 @MainActor
 final class FilterController: ObservableObject {
     @Published private(set) var isOn = false
@@ -17,20 +15,12 @@ final class FilterController: ObservableObject {
     @Published var bleep: Bool {
         didSet { tap?.setMode(bleep ? .bleep : .mute); defaults.set(bleep, forKey: Key.bleep) }
     }
-    /// Output latency / max reach-back, ms. Applied by rebuilding the engine.
+    /// Output latency, ms. Must exceed Whisper's recognition lag — applied by
+    /// rebuilding the engine (it sizes the delay buffer).
     @Published var delayMs: Double {
         didSet { defaults.set(delayMs, forKey: Key.delay) }
     }
-    /// 0...1 detection sensitivity. Set at spotter creation, so rebuilds on change.
-    @Published var sensitivity: Double {
-        didSet { defaults.set(sensitivity, forKey: Key.sensitivity) }
-    }
-    @Published var msPerChar: Double {
-        didSet { tap?.setMsPerChar(UInt32(msPerChar)); defaults.set(msPerChar, forKey: Key.msPerChar) }
-    }
-    @Published var latencyMarginMs: Double {
-        didSet { tap?.setLatencyMargin(UInt32(latencyMarginMs)); defaults.set(latencyMarginMs, forKey: Key.latency) }
-    }
+    /// Extra silence kept after a censored word, ms (live).
     @Published var postrollMs: Double {
         didSet { tap?.setPostroll(UInt32(postrollMs)); defaults.set(postrollMs, forKey: Key.postroll) }
     }
@@ -43,52 +33,38 @@ final class FilterController: ObservableObject {
 
     private var tap: AudioTap?
     private let defaults = UserDefaults.standard
-    private let modelDir: String     // read-only, bundled (encoder/decoder/bpe/tokens)
-    private let keywordsURL: URL     // writable, tokenised keyword file the engine loads
-    private let wordsURL: URL        // writable, the human-readable word list
+    private let wordsURL: URL // writable plain word list the detector reads
 
     private enum Key {
-        static let bleep = "bleep", delay = "delayMs", msPerChar = "msPerChar"
-        static let latency = "latencyMarginMs", postroll = "postrollMs", sensitivity = "sensitivity"
+        static let bleep = "bleep", delay = "delayMs", postroll = "postrollMs"
     }
 
     /// Factory defaults, shared by first launch and the Reset button.
     enum Defaults {
-        static let bleep = false, delay = 800.0, msPerChar = 80.0
-        static let latency = 350.0, postroll = 150.0, sensitivity = 0.7
+        static let bleep = false
+        static let delay = 2500.0  // Whisper runs in rolling windows → larger lag than the old spotter
+        static let postroll = 150.0
     }
 
     init() {
-        let bundleModels = Bundle.main.resourcePath.map { "\($0)/models" } ?? ""
-        modelDir = bundleModels
+        let res = Bundle.main.resourcePath ?? ""
 
-        // Writable copies of the keyword files live in Application Support, so the
-        // editor never has to touch the signed app bundle.
+        // Writable word list in Application Support, seeded from the bundled
+        // default list on first run.
         let fm = FileManager.default
         let dir = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Implicit", isDirectory: true)
         try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
-        keywordsURL = dir.appendingPathComponent("keywords.txt")
         wordsURL = dir.appendingPathComponent("words.txt")
-
-        // Seed the tokenised keyword file from the bundle on first run so detection
-        // works before any edit.
-        let bundledKeywords = URL(fileURLWithPath: "\(bundleModels)/keywords.txt")
-        if !fm.fileExists(atPath: keywordsURL.path), fm.fileExists(atPath: bundledKeywords.path) {
-            try? fm.copyItem(at: bundledKeywords, to: keywordsURL)
+        if !fm.fileExists(atPath: wordsURL.path) {
+            let seed = URL(fileURLWithPath: "\(res)/swears.txt")
+            try? fm.copyItem(at: seed, to: wordsURL)
         }
-        // Editable word list: restore the saved one, else derive from the @labels
-        // in the keyword file.
-        if let saved = try? String(contentsOf: wordsURL, encoding: .utf8), !saved.isEmpty {
-            wordsText = saved
-        } else {
-            let seed = fm.fileExists(atPath: keywordsURL.path) ? keywordsURL : bundledKeywords
-            wordsText = Self.wordsFromKeywordFile(seed)
-        }
+        wordsText = (try? String(contentsOf: wordsURL, encoding: .utf8)) ?? ""
 
-        // Engine env: model dir (read-only) + the writable keyword file.
-        setenv("SWEAR_KWS_DIR", modelDir, 1)
-        setenv("SWEAR_KEYWORDS_FILE", keywordsURL.path, 1)
+        // Engine env: the bundled whisper model + the writable word list.
+        setenv("SWEAR_WHISPER_MODEL", "\(res)/ggml-small.en.bin", 1)
+        setenv("SWEAR_WORDS_FILE", wordsURL.path, 1)
 
         // Restore saved settings (didSet does not fire during init).
         let ud = UserDefaults.standard
@@ -97,10 +73,7 @@ final class FilterController: ObservableObject {
         }
         bleep = ud.object(forKey: Key.bleep) == nil ? Defaults.bleep : ud.bool(forKey: Key.bleep)
         delayMs = saved(Key.delay, Defaults.delay)
-        msPerChar = saved(Key.msPerChar, Defaults.msPerChar)
-        latencyMarginMs = saved(Key.latency, Defaults.latency)
         postrollMs = saved(Key.postroll, Defaults.postroll)
-        sensitivity = saved(Key.sensitivity, Defaults.sensitivity)
 
         requestPermissions()
     }
@@ -111,10 +84,7 @@ final class FilterController: ObservableObject {
         guard tap == nil else { return }
         let t = AudioTap(delayMs: Float(delayMs),
                          mode: bleep ? .bleep : .mute,
-                         msPerChar: UInt32(msPerChar),
-                         latencyMarginMs: UInt32(latencyMarginMs),
-                         postrollMs: UInt32(postrollMs),
-                         sensitivity: Float(sensitivity))
+                         postrollMs: UInt32(postrollMs))
         do {
             try t.start()
             tap = t
@@ -134,54 +104,36 @@ final class FilterController: ObservableObject {
         isOn = false
     }
 
-    /// Delay (buffer size) and sensitivity (spotter config) are baked in at
-    /// engine creation, so changing them needs a fresh engine. Called on slider
-    /// release only, to avoid reloading the model mid-drag.
+    /// The delay sizes the buffer (fixed at engine creation), so a change needs a
+    /// fresh engine. Called on slider release only.
     func restartForStructuralChange() {
         guard isOn else { return }
         stop()
         start()
     }
 
-    /// Restore every setting to its factory default.
     func reset() {
         bleep = Defaults.bleep
-        msPerChar = Defaults.msPerChar
-        latencyMarginMs = Defaults.latency
         postrollMs = Defaults.postroll
         delayMs = Defaults.delay
-        sensitivity = Defaults.sensitivity
         restartForStructuralChange()
     }
 
-    /// Tokenise the edited word list into the writable keyword file and reload
-    /// the engine (if running) so it takes effect.
+    /// Save the edited word list and reload the engine (if running) so it picks
+    /// up the new words. No tokenisation — Whisper matches plain text.
     func applyWords() {
-        try? wordsText.write(to: wordsURL, atomically: true, encoding: .utf8)
-        let written = RustCore.tokenizeKeywords(modelDir: modelDir, words: wordsText, outPath: keywordsURL.path)
-        guard written >= 0 else {
-            wordsStatus = "Couldn't tokenize the list — check the words."
+        do {
+            try wordsText.write(to: wordsURL, atomically: true, encoding: .utf8)
+        } catch {
+            wordsStatus = "Couldn't save the list: \(error.localizedDescription)"
             return
         }
-        let dropped = wordsText.split(whereSeparator: \.isNewline)
+        let count = wordsText.split(whereSeparator: \.isNewline)
             .filter { let t = $0.trimmingCharacters(in: .whitespaces); return !t.isEmpty && !t.hasPrefix("#") }
-            .count - Int(written)
-        wordsStatus = dropped > 0
-            ? "\(written) words active (\(dropped) couldn't be tokenized)."
-            : "\(written) words active."
-        if isOn { restartForStructuralChange() }
-    }
-
-    /// Extract the human-readable words (the `@word` suffix) from a keyword file.
-    private static func wordsFromKeywordFile(_ url: URL) -> String {
-        guard let text = try? String(contentsOf: url, encoding: .utf8) else { return "" }
-        var words: [String] = []
-        for line in text.split(whereSeparator: \.isNewline) {
-            guard let at = line.lastIndex(of: "@") else { continue }
-            let word = line[line.index(after: at)...].trimmingCharacters(in: .whitespaces)
-            if !word.isEmpty { words.append(word) }
-        }
-        return words.joined(separator: "\n")
+            .count
+        wordsStatus = "\(count) words — reloading…"
+        restartForStructuralChange()
+        wordsStatus = "\(count) words active."
     }
 
     /// Prompt for the two permissions a process tap needs: microphone and (on

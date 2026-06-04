@@ -4,31 +4,31 @@
 #
 #   ./run.sh
 #
-# Produces build/Implicit.app — a self-contained, signed menubar agent (no
-# dock icon) with the keyword model and native dylibs bundled inside. All tuning
-# (mute/bleep, output delay, word-length estimate, latency reach-back, tail) is
-# done from the menubar popover; settings persist across launches. Detection
-# needs a model (rust-core/models/keywords.txt — run ./scripts/fetch-model.sh
-# once); without one the app runs as a transparent delay.
+# Produces build/Implicit.app — a self-contained, signed menubar agent (no dock
+# icon) with the Whisper model bundled inside. Tuning (mute/bleep, output delay,
+# tail, word list) is done from the menubar; settings persist across launches.
+# Detection needs the model: run ./scripts/fetch-model.sh once. Without it the
+# app runs as a transparent delay.
 
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODELS_DIR="$HERE/rust-core/models"
 RELEASE="$HERE/rust-core/target/release"
+WHISPER_MODEL="$MODELS_DIR/ggml-small.en.bin"
 
 command -v cargo >/dev/null || { echo "error: Rust not found — install via https://rustup.rs" >&2; exit 1; }
 command -v swift >/dev/null || { echo "error: swift not found — install Xcode or the Command Line Tools" >&2; exit 1; }
 
 FEATURES=()
-if [[ -f "$MODELS_DIR/keywords.txt" ]]; then
-  echo "==> model found — building with keyword detection"
-  FEATURES=(--features sherpa)
+if [[ -f "$WHISPER_MODEL" ]]; then
+  echo "==> whisper model found — building with detection"
+  FEATURES=(--features whisper)
 else
   echo "==> no model installed — app will run as a transparent delay"
   echo "    (run ./scripts/fetch-model.sh once to enable detection)"
 fi
 
-echo "==> building Rust core"
+echo "==> building Rust core (this compiles whisper.cpp the first time)"
 ( cd "$HERE/rust-core" && cargo build --release ${FEATURES[@]+"${FEATURES[@]}"} )
 
 echo "==> building app binary"
@@ -43,15 +43,15 @@ cp "$BIN_DIR/SwearFilter" "$APP/Contents/MacOS/SwearFilter"
 cp "$HERE/macos-app/Resources/Info.plist" "$APP/Contents/Info.plist"
 cp "$HERE/macos-app/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 
-# Bundle the keyword model (whole dir: canonical symlinks + the epoch-named
-# files they point at). The app sets SWEAR_KWS_DIR to this path on launch.
-[[ -d "$MODELS_DIR" ]] && cp -R "$MODELS_DIR" "$APP/Contents/Resources/models"
+# Bundle the Whisper model + the default word list. The app points
+# SWEAR_WHISPER_MODEL here and seeds its editable word list from swears.txt.
+[[ -f "$WHISPER_MODEL" ]] && cp "$WHISPER_MODEL" "$APP/Contents/Resources/ggml-small.en.bin"
+cp "$HERE/scripts/swears.txt" "$APP/Contents/Resources/swears.txt"
 
-# Bundle ALL native dylibs (libswearcore + the sherpa + onnxruntime libs it pulls
-# in, all @rpath-linked) so the app is self-contained, and repoint the binary at
-# @rpath/Frameworks. install_name_tool must run before signing (it invalidates
-# any signature). Copy real files only — skip the libonnxruntime.dylib symlink.
-find "$RELEASE" -maxdepth 1 -type f -name '*.dylib' -exec cp {} "$APP/Contents/Frameworks/" \;
+# Bundle libswearcore (whisper.cpp + Metal are statically linked into it, so
+# there are no other native dylibs to ship) and repoint the binary at
+# @rpath/Frameworks. install_name_tool must run before signing.
+cp "$RELEASE/libswearcore.dylib" "$APP/Contents/Frameworks/"
 OLD_REF="$(otool -L "$APP/Contents/MacOS/SwearFilter" | awk '/libswearcore/{print $1; exit}')"
 [[ -n "$OLD_REF" ]] && install_name_tool -change "$OLD_REF" "@rpath/libswearcore.dylib" "$APP/Contents/MacOS/SwearFilter"
 install_name_tool -add_rpath "@executable_path/../Frameworks" "$APP/Contents/MacOS/SwearFilter"
@@ -77,4 +77,6 @@ pkill -f "Implicit.app/Contents/MacOS/SwearFilter" 2>/dev/null || true
 # repeated rebuilds.
 LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister"
 [[ -x "$LSREGISTER" ]] && "$LSREGISTER" -f "$APP" 2>/dev/null || true
-open "$APP"
+# `open` occasionally returns -600 (stale LaunchServices state after many
+# rebuilds); fall back to launching the binary directly.
+open "$APP" 2>/dev/null || ( "$APP/Contents/MacOS/SwearFilter" &>/dev/null & )

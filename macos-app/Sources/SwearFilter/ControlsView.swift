@@ -27,17 +27,9 @@ struct ControlsView: View {
             }
             .pickerStyle(.segmented)
 
-            paramSlider("Sensitivity", value: $controller.sensitivity, range: 0...1,
-                        format: { "\(Int($0 * 100))%" },
-                        help: "Higher catches more (incl. under music), but more false hits.",
+            paramSlider("Output delay", value: $controller.delayMs, range: 1500...4000,
+                        help: "Whisper needs lead time; more delay catches more, with more lag.",
                         onRelease: { controller.restartForStructuralChange() })
-            paramSlider("Output delay", value: $controller.delayMs, range: 400...1500,
-                        help: "Higher = catches longer words fully, more lag.",
-                        onRelease: { controller.restartForStructuralChange() })
-            paramSlider("Word length / letter", value: $controller.msPerChar, range: 40...140,
-                        help: "Speech-rate estimate. Raise if word starts bleed.")
-            paramSlider("Latency reach-back", value: $controller.latencyMarginMs, range: 100...600,
-                        help: "Detector lag before the word. Lower if tails get cut.")
             paramSlider("Trailing tail", value: $controller.postrollMs, range: 0...500,
                         help: "Extra silence kept after the word.")
 
