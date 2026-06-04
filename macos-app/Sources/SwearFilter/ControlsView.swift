@@ -43,6 +43,8 @@ struct ControlsView: View {
 
             Divider()
 
+            Button("Edit Words…") { controller.openEditor?() }
+
             HStack {
                 Button("Reset") { controller.reset() }
                 Spacer()

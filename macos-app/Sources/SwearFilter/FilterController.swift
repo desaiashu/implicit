@@ -5,8 +5,10 @@ import SwiftUI
 
 /// Owns the audio tap and the live-tunable settings, and bridges them to the
 /// menubar UI. Live params (mute/bleep, word-length estimate, latency reach-back,
-/// postroll) are pushed straight into the running engine; the output delay is
-/// structural (fixes the buffer size) so it rebuilds the engine on change.
+/// postroll) are pushed straight into the running engine; the output delay and
+/// sensitivity are structural (baked in at engine creation) so they rebuild the
+/// engine on change. The editable word list is tokenised on apply and written to
+/// a writable keyword file outside the (read-only, signed) app bundle.
 @MainActor
 final class FilterController: ObservableObject {
     @Published private(set) var isOn = false
@@ -33,8 +35,18 @@ final class FilterController: ObservableObject {
         didSet { tap?.setPostroll(UInt32(postrollMs)); defaults.set(postrollMs, forKey: Key.postroll) }
     }
 
+    /// Editable word list, one word per line (what the editor window binds to).
+    @Published var wordsText: String
+    @Published var wordsStatus: String?
+    /// Set by the AppDelegate so the menu's "Edit Words…" button can open the window.
+    var openEditor: (() -> Void)?
+
     private var tap: AudioTap?
     private let defaults = UserDefaults.standard
+    private let modelDir: String     // read-only, bundled (encoder/decoder/bpe/tokens)
+    private let keywordsURL: URL     // writable, tokenised keyword file the engine loads
+    private let wordsURL: URL        // writable, the human-readable word list
+
     private enum Key {
         static let bleep = "bleep", delay = "delayMs", msPerChar = "msPerChar"
         static let latency = "latencyMarginMs", postroll = "postrollMs", sensitivity = "sensitivity"
@@ -47,12 +59,38 @@ final class FilterController: ObservableObject {
     }
 
     init() {
-        // Point the engine at the model bundled under Resources/models.
-        if let res = Bundle.main.resourcePath {
-            setenv("SWEAR_KWS_DIR", "\(res)/models", 1)
+        let bundleModels = Bundle.main.resourcePath.map { "\($0)/models" } ?? ""
+        modelDir = bundleModels
+
+        // Writable copies of the keyword files live in Application Support, so the
+        // editor never has to touch the signed app bundle.
+        let fm = FileManager.default
+        let dir = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Implicit", isDirectory: true)
+        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        keywordsURL = dir.appendingPathComponent("keywords.txt")
+        wordsURL = dir.appendingPathComponent("words.txt")
+
+        // Seed the tokenised keyword file from the bundle on first run so detection
+        // works before any edit.
+        let bundledKeywords = URL(fileURLWithPath: "\(bundleModels)/keywords.txt")
+        if !fm.fileExists(atPath: keywordsURL.path), fm.fileExists(atPath: bundledKeywords.path) {
+            try? fm.copyItem(at: bundledKeywords, to: keywordsURL)
         }
-        // Restore saved settings (didSet does not fire during init). Use a local
-        // UserDefaults handle so we don't touch `self` before init completes.
+        // Editable word list: restore the saved one, else derive from the @labels
+        // in the keyword file.
+        if let saved = try? String(contentsOf: wordsURL, encoding: .utf8), !saved.isEmpty {
+            wordsText = saved
+        } else {
+            let seed = fm.fileExists(atPath: keywordsURL.path) ? keywordsURL : bundledKeywords
+            wordsText = Self.wordsFromKeywordFile(seed)
+        }
+
+        // Engine env: model dir (read-only) + the writable keyword file.
+        setenv("SWEAR_KWS_DIR", modelDir, 1)
+        setenv("SWEAR_KEYWORDS_FILE", keywordsURL.path, 1)
+
+        // Restore saved settings (didSet does not fire during init).
         let ud = UserDefaults.standard
         func saved(_ key: String, _ fallback: Double) -> Double {
             ud.object(forKey: key) == nil ? fallback : ud.double(forKey: key)
@@ -114,6 +152,36 @@ final class FilterController: ObservableObject {
         delayMs = Defaults.delay
         sensitivity = Defaults.sensitivity
         restartForStructuralChange()
+    }
+
+    /// Tokenise the edited word list into the writable keyword file and reload
+    /// the engine (if running) so it takes effect.
+    func applyWords() {
+        try? wordsText.write(to: wordsURL, atomically: true, encoding: .utf8)
+        let written = RustCore.tokenizeKeywords(modelDir: modelDir, words: wordsText, outPath: keywordsURL.path)
+        guard written >= 0 else {
+            wordsStatus = "Couldn't tokenize the list — check the words."
+            return
+        }
+        let dropped = wordsText.split(whereSeparator: \.isNewline)
+            .filter { let t = $0.trimmingCharacters(in: .whitespaces); return !t.isEmpty && !t.hasPrefix("#") }
+            .count - Int(written)
+        wordsStatus = dropped > 0
+            ? "\(written) words active (\(dropped) couldn't be tokenized)."
+            : "\(written) words active."
+        if isOn { restartForStructuralChange() }
+    }
+
+    /// Extract the human-readable words (the `@word` suffix) from a keyword file.
+    private static func wordsFromKeywordFile(_ url: URL) -> String {
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else { return "" }
+        var words: [String] = []
+        for line in text.split(whereSeparator: \.isNewline) {
+            guard let at = line.lastIndex(of: "@") else { continue }
+            let word = line[line.index(after: at)...].trimmingCharacters(in: .whitespaces)
+            if !word.isEmpty { words.append(word) }
+        }
+        return words.joined(separator: "\n")
     }
 
     /// Prompt for the two permissions a process tap needs: microphone and (on

@@ -49,6 +49,12 @@ uint32_t swear_engine_active_censors(const SwearEngine *engine);
 /* Static, NUL-terminated; valid for the process lifetime. */
 const char *swear_core_version(void);
 
+/* Tokenise a newline-separated word list with the model's BPE (under model_dir)
+ * and write the sherpa keyword file to out_path. Returns keywords written, or
+ * -1 on error. Recreate the engine afterward to load the new file. */
+int swear_tokenize_keywords(const char *model_dir, const char *words,
+                            const char *out_path);
+
 #ifdef __cplusplus
 }
 #endif

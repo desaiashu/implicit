@@ -48,4 +48,12 @@ final class RustCore {
     static var version: String {
         String(cString: swear_core_version())
     }
+
+    /// Tokenise a newline-separated word list with the model's BPE and write the
+    /// sherpa keyword file. Returns the number of keywords written, or -1 on error.
+    /// Doesn't need an engine instance.
+    @discardableResult
+    static func tokenizeKeywords(modelDir: String, words: String, outPath: String) -> Int32 {
+        swear_tokenize_keywords(modelDir, words, outPath)
+    }
 }

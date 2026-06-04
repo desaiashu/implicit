@@ -13,10 +13,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem!
     private var hostingView: NSHostingView<ControlsView>!
     private var iconObserver: AnyCancellable?
+    private var wordsWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory) // menubar agent, no dock icon
 
+        controller.openEditor = { [weak self] in self?.showWordsEditor() }
         hostingView = NSHostingView(rootView: ControlsView(controller: controller))
         hostingView.frame = NSRect(origin: .zero, size: hostingView.fittingSize)
 
@@ -40,6 +42,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// the permission hint appears/disappears).
     func menuWillOpen(_ menu: NSMenu) {
         hostingView.frame = NSRect(origin: .zero, size: hostingView.fittingSize)
+    }
+
+    /// Open (or focus) the word-list editor in its own window. A real window —
+    /// not a menu — so the multi-line text editor behaves normally.
+    private func showWordsEditor() {
+        if wordsWindow == nil {
+            let window = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 380, height: 460),
+                styleMask: [.titled, .closable], backing: .buffered, defer: false)
+            window.title = "Implicit — Words"
+            window.isReleasedWhenClosed = false
+            window.contentViewController = NSHostingController(rootView: WordsEditorView(controller: controller))
+            window.center()
+            wordsWindow = window
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        wordsWindow?.makeKeyAndOrderFront(nil)
     }
 
     private func updateIcon() {

@@ -15,12 +15,15 @@ crate-type = ["rlib", "staticlib", "cdylib"]
 default = []
 # Enables the sherpa-onnx streaming keyword-spotter. Off by default so the pure
 # core (delay + censor + detector trait) builds and tests with zero native deps.
-sherpa = ["dep:sherpa-rs"]
+sherpa = ["dep:sherpa-rs", "dep:sentencepiece"]
 
 [dependencies]
 # `sys` re-exports the raw `sherpa_rs_sys` FFI, which kws.rs drives directly for
 # the continuous streaming keyword-spotting flow (the safe wrapper is one-shot).
 sherpa-rs = { version = "0.6", optional = true, features = ["sys"] }
+# Tokenises new keywords with the model's own BPE at runtime — identical output
+# to scripts/fetch-model.sh — so the app can add words without Python.
+sentencepiece = { version = "0.13", optional = true }
 
 [profile.release]
 lto = true

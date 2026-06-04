@@ -82,7 +82,11 @@ impl KwsDetector {
         let decoder = cpath("decoder.onnx")?;
         let joiner = cpath("joiner.onnx")?;
         let tokens = cpath("tokens.txt")?;
-        let keywords = cpath("keywords.txt")?;
+        // The keyword file is user-editable, so it lives outside the (read-only,
+        // code-signed) model dir when SWEAR_KEYWORDS_FILE points elsewhere.
+        let keywords_path = std::env::var("SWEAR_KEYWORDS_FILE")
+            .unwrap_or_else(|_| dir.join("keywords.txt").to_string_lossy().into_owned());
+        let keywords = CString::new(keywords_path).map_err(|e| format!("bad keywords path: {e}"))?;
         let provider = CString::new("cpu").unwrap();
 
         let config = sys::SherpaOnnxKeywordSpotterConfig {

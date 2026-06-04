@@ -154,3 +154,38 @@ pub extern "C" fn swear_engine_active_censors(p: *const SwearEngine) -> u32 {
 pub extern "C" fn swear_core_version() -> *const c_char {
     concat!(env!("CARGO_PKG_VERSION"), "\0").as_ptr() as *const c_char
 }
+
+/// Tokenise a newline-separated `words` list with the model's BPE (under
+/// `model_dir`) and write the sherpa keyword file to `out_path`. Lets the app
+/// add/edit words without Python. Returns the number of keywords written, or -1
+/// on error. The engine must be recreated afterward to load the new file.
+#[cfg(feature = "sherpa")]
+#[no_mangle]
+pub extern "C" fn swear_tokenize_keywords(
+    model_dir: *const c_char,
+    words: *const c_char,
+    out_path: *const c_char,
+) -> i32 {
+    use std::ffi::CStr;
+    if model_dir.is_null() || words.is_null() || out_path.is_null() {
+        return -1;
+    }
+    let cstr = |p: *const c_char| unsafe { CStr::from_ptr(p) }.to_string_lossy().into_owned();
+    let dir = cstr(model_dir);
+    let list: Vec<String> = cstr(words).lines().map(str::to_owned).collect();
+    let out = cstr(out_path);
+
+    match crate::tokenize::keywords_file_contents(std::path::Path::new(&dir), &list) {
+        Ok(contents) => {
+            let count = contents.lines().count() as i32;
+            match std::fs::write(&out, contents) {
+                Ok(()) => count,
+                Err(_) => -1,
+            }
+        }
+        Err(e) => {
+            eprintln!("[swearcore] tokenize failed: {e}");
+            -1
+        }
+    }
+}
